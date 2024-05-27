@@ -9,6 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn import model_selection
 from sklearn import linear_model
+from sklearn import ensemble
 import lightgbm as lgb
 
 
@@ -56,12 +57,6 @@ def make_csv():
     # Sum all the claims of a contract
     df_sev = df_sev.groupby(["IDpol"], as_index=False).sum()
 
-    # Remove the outliers
-    up_lim = df_sev["ClaimAmount"].quantile(0.75)
-    # up_lim = 5e3
-
-    df = df_sev[df_sev["ClaimAmount"] < up_lim]
-
     # Combine the claim data with frequency data
     df = df_freq.set_index("IDpol").join(df_sev.set_index("IDpol"))
 
@@ -75,37 +70,6 @@ def make_csv():
     # # More visualization
     # df_sev = df_sev[df_sev["ClaimAmount"] < up_lim]
 
-    # Claim per unit of time
-    df["ClaimExp"] = df["ClaimAmount"] / df["Exposure"]
-
-    # # Make categorical data categorical with integer values
-    # keys_list = ["Area", "VehPower", "VehBrand", "VehGas", "Region"]
-    # for key_ in keys_list:
-    #     df[key_] = df[key_].astype("category").cat.codes
-
-    # Some transformations to the regressors
-    df["VehAgeSq"] = df["VehAge"] ** 2
-    df["DrivAgeSq"] = df["DrivAge"] ** 2
-
-    df_tmp = pd.get_dummies(df["Area"], drop_first=True)
-    df = pd.concat([df, df_tmp], axis=1)
-
-    df_tmp = pd.get_dummies(df["VehGas"], drop_first=True)
-    df = pd.concat([df, df_tmp], axis=1)
-
-    df_tmp = pd.get_dummies(df["VehBrand"], drop_first=True)
-    df = pd.concat([df, df_tmp], axis=1)
-
-    df_tmp = pd.get_dummies(df["Region"], drop_first=True)
-    df = pd.concat([df, df_tmp], axis=1)
-
-    df["Density"] = np.log(df["Density"])
-
-    # df["ClaimNb"] = df["ClaimNb"].astype("bool")
-
-    # Save as csv
-    df.to_csv("claim_freq_data.csv")
-
     # Return the data frame
     return df
 
@@ -113,9 +77,81 @@ def make_csv():
 def load_csv():
     """Reads the csv data into a data frame"""
 
-    df = pd.read_csv("claim_freq_data.csv")
+    # Load the csv file
+    df = pd.read_csv("ins_claims.csv")
 
-    return df
+    # Remove the outliers
+    up_lim = df["ClaimAmount"].quantile(0.995)
+    df = df[df["ClaimAmount"] < up_lim]
+
+    # up_lim = df["VehAge"].quantile(0.995)
+    # df = df[df["VehAge"] < up_lim]
+
+    # === New data frame ===
+    new_df = pd.DataFrame()
+
+    # Claim per unit time
+    new_df["ClaimExp"] = df["ClaimAmount"] / df["Exposure"]
+
+    # # Area
+    # df_tmp = pd.get_dummies(df["Area"], drop_first=True)
+    # new_df = pd.concat([new_df, df_tmp], axis=1)
+
+    # Vehicle Power
+    new_df["VehPower"] = df["VehPower"]
+
+    # Vehicle Age
+    new_df["VehAge"] = df["VehAge"]
+    # new_df["VehAgeSq"] = df["VehAge"] ** 2
+
+    # Driver Age
+    new_df["DrivAge"] = df["DrivAge"]
+    # new_df["DrivAgeSq"] = df["DrivAge"] ** 2
+
+    # Bonus Malus
+    new_df["BonusMalus"] = df["BonusMalus"]
+
+    # # Vehicle brand
+    # df_tmp = pd.get_dummies(df["VehBrand"], drop_first=True)
+    # new_df = pd.concat([new_df, df_tmp], axis=1)
+
+    # # Vehicle gas-type
+    # df_tmp = pd.get_dummies(df["VehGas"], drop_first=True)
+    # new_df = pd.concat([new_df, df_tmp], axis=1)
+
+    # Density
+    new_df["Density"] = df["Density"]
+
+    # # Region
+    # df_tmp = pd.get_dummies(df["Region"], drop_first=True)
+    # new_df = pd.concat([new_df, df_tmp], axis=1)
+
+    # Claim number/frequency
+    # new_df["ClaimYes"] = (df["ClaimAmount"] > 0.0).astype(int)
+    # new_df["ClaimNb"] = df["ClaimNb"]
+    # new_df["ClaimNb"] = df["ClaimNb"].astype("bool")
+
+    # # Everything is a interaction variable with "ClaimYes"
+    # new_df.mul(new_df["ClaimYes"], axis="index")
+
+    # # Classifier - ClaimYes or ClaimNo
+    # logi_mod = linear_model.LogisticRegression(
+    #     penalty="l2",
+    #     tol=1e-4,
+    #     C=1.0,
+    #     solver="newton-cholesky",
+    #     max_iter=10000,
+    #     verbose=1,
+    # )
+
+    # logical_vec = (new_df.columns != "ClaimExp") * (
+    #     new_df.columns != "ClaimYes"
+    # )
+    # logi_mod.fit(new_df.loc[:, logical_vec], new_df["ClaimYes"])
+
+    # new_df["ClaimYes"] = logi_mod.predict(new_df.loc[:, logical_vec])
+
+    return new_df
 
 
 def glm_tweedie(df):
@@ -124,44 +160,15 @@ def glm_tweedie(df):
     """
 
     # Train and Test split
+    logi = df.columns != "ClaimExp"
+
     X_train, X_test, Y_train, Y_test = model_selection.train_test_split(
-        df[
-            [
-                "Exposure",
-                "ClaimNb",
-                "'B'",
-                "'C'",
-                "'D'",
-                "'E'",
-                "'F'",
-                "VehPower",
-                "VehAge",
-                "VehAgeSq",
-                "DrivAge",
-                "DrivAgeSq",
-                "BonusMalus",
-                "'B2'",
-                "'B3'",
-                "'B4'",
-                "'B5'",
-                "'B6'",
-                "'B10'",
-                "'B11'",
-                "'B12'",
-                "'B13'",
-                "'B14'",
-                "Regular",
-                "Density",
-                # "Region",
-            ]
-        ],
-        df["ClaimExp"],
-        # df["ClaimAmount"],
+        df.loc[:, logi], df["ClaimExp"], shuffle=False
     )
 
     # GLM model with Tweedie distribution
     tw_mod = linear_model.TweedieRegressor(
-        power=1.5,
+        power=1.2,
         alpha=1e-2,
         fit_intercept=True,
         link="auto",
@@ -173,10 +180,9 @@ def glm_tweedie(df):
     )
 
     # Fit the model
-    # tw_mod.fit(X_train, Y_train)
-    # tw_mod.fit(X_train, Y_train)
     tw_mod.fit(X_train, Y_train)
 
+    rprint(f"\n\nTweedie Regression:")
     rprint(f"In-sample fit is {tw_mod.score(X_train, Y_train)}")
     rprint(f"Out-of-sample fit is {tw_mod.score(X_test, Y_test)}")
 
@@ -186,108 +192,68 @@ def glm_tweedie(df):
     rmse_out = rmse(Y_test, tw_mod.predict(X_test))
     rprint(f"Out-of-sample rmse is {rmse_out}")
 
-    # # Linear regression
-    # lin_mod = linear_model.LinearRegression(fit_intercept=True, copy_X=True)
+    # Linear regression
+    lin_mod = linear_model.LinearRegression(fit_intercept=True, copy_X=True)
 
-    # lin_mod.fit(X_train, Y_train)
+    lin_mod.fit(X_train, Y_train)
 
-    # rprint(f"In-sample fit is {lin_mod.score(X_train, Y_train)}")
-    # rprint(f"Out-of-sample fit is {lin_mod.score(X_test, Y_test)}")
+    rprint(f"\n\nLinear Regression:")
+    rprint(f"In-sample fit is {lin_mod.score(X_train, Y_train)}")
+    rprint(f"Out-of-sample fit is {lin_mod.score(X_test, Y_test)}")
 
-    # # Some info
-    # rprint(f"Intercept is {tw_mod.intercept_}\n")
+    rmse_in = rmse(Y_train, lin_mod.predict(X_train))
+    rprint(f"In-sample rmse is {rmse_in}")
 
-    # rprint(f"The coefficients are: \n{tw_mod.coef_}\n")
-
-    # # Fit the GLM with Tweedie distribution
-    # int_len = 100
-    # score_vec = np.empty(int_len, dtype=float)
-    # interval = np.linspace(start=0.01, stop=1.99, num=int_len)
-
-    # for ii, pow in enumerate(tqdm(interval)):
-    #     tw_mod = linear_model.TweedieRegressor(
-    #         power=pow,
-    #         alpha=1e-2,
-    #         fit_intercept=True,
-    #         link="auto",
-    #         solver="newton-cholesky",  # "lbfgs",
-    #         max_iter=1000,
-    #         tol=1e-4,
-    #         warm_start=False,
-    #         verbose=0,
-    #     )
-
-    #     tw_mod.fit(X_train, Y_train)
-
-    #     score_vec[ii] = tw_mod.score(X_test, Y_test)
-
-    # np.savetxt("score.csv", score_vec)
-    # np.savetxt("power.csv", interval)
+    rmse_out = rmse(Y_test, lin_mod.predict(X_test))
+    rprint(f"Out-of-sample rmse is {rmse_out}")
 
 
 def train_gbm(df):
 
     # Train and Test split
+    logi = df.columns != "ClaimExp"
+
     X_train, X_test, Y_train, Y_test = model_selection.train_test_split(
-        df[
-            [
-                "'B'",
-                "'C'",
-                "'D'",
-                "'E'",
-                "'F'",
-                "VehPower",
-                "VehAge",
-                "VehAgeSq",
-                "DrivAge",
-                "DrivAgeSq",
-                "BonusMalus",
-                "'B2'",
-                "'B3'",
-                "'B4'",
-                "'B5'",
-                "'B6'",
-                "'B10'",
-                "'B11'",
-                "'B12'",
-                "'B13'",
-                "'B14'",
-                "Regular",
-                "Density",
-                # "Region",
-            ]
-        ],
-        df["ClaimExp"],
+        df.loc[:, logi], df["ClaimExp"], shuffle=True
     )
 
     gbm_mod = lgb.LGBMRegressor(
         boosting_type="gbdt",
-        num_leaves=21,
+        num_leaves=31,
         max_depth=-1,
-        learning_rate=0.3,
-        n_estimators=10,
-        subsample_for_bin=int(2e5),
-        objective="regression",
-        # class_weight=None,
+        learning_rate=0.1,
+        n_estimators=100,
+        subsample_for_bin=200000,
+        objective=None,
+        class_weight=None,
         min_split_gain=0.0,
-        min_child_weight=1e-3,
+        min_child_weight=0.001,
         min_child_samples=20,
         subsample=1.0,
         subsample_freq=0,
         colsample_bytree=1.0,
-        reg_alpha=20.0,
-        reg_lambda=0.0,
-        random_state=None,
-        n_jobs=None,
-        importance_type="split",
+        reg_alpha=0.0,
+        reg_lambda=10.0,
+        importance_type="gain",
     )
 
-    gbm_mod.fit(X_train, Y_train)
+    gbm_mod.fit(X=X_train, y=Y_train)
+
+    lgb.plot_importance(gbm_mod)
+    plt.show()
 
     score_in = gbm_mod.score(X_train, Y_train)
     score_out = gbm_mod.score(X_test, Y_test)
 
-    rprint(f"In-sample fit: {score_in} \nOut-of-sample fit: {score_out}")
+    rprint(f"Gradient Boosting:")
+    rprint(f"In-sample fit: {score_in}")
+    rprint(f"Out-of-sample fit: {score_out}")
+
+    rmse_in = rmse(Y_train, gbm_mod.predict(X_train))
+    rprint(f"In-sample rmse is {rmse_in}")
+
+    rmse_out = rmse(Y_test, gbm_mod.predict(X_test))
+    rprint(f"Out-of-sample rmse is {rmse_out}")
 
 
 if __name__ == "__main__":
@@ -295,8 +261,8 @@ if __name__ == "__main__":
     Main instructions
     """
 
-    if len(sys.argv) > 1 and sys.argv[1] == "make_csv":
-        make_csv()
+    # if len(sys.argv) > 1 and sys.argv[1] == "make_csv":
+    #     make_csv()
 
     # Load the data set
     df = load_csv()
