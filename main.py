@@ -9,7 +9,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn import model_selection
 from sklearn import linear_model
-from sklearn import ensemble
 import lightgbm as lgb
 
 
@@ -17,9 +16,7 @@ def rmse(x_vec, y_vec):
     """
     Root Mean Squared Error (RMSE) for forecast/prediction accuracy
     """
-    rmse_ = np.sqrt(np.sum((x_vec - y_vec) ** 2))
     rmse_ = np.sqrt(np.mean((x_vec - y_vec) ** 2))
-    # rmse_ = np.sum(np.abs((x_vec - y_vec)))
 
     return rmse_
 
@@ -88,9 +85,9 @@ def load_csv():
     # Claim per unit time
     new_df["ClaimExp"] = df["ClaimAmount"] / df["Exposure"]
 
-    # # Area
-    # df_tmp = pd.get_dummies(df["Area"], drop_first=True)
-    # new_df = pd.concat([new_df, df_tmp], axis=1)
+    # Area
+    df_tmp = pd.get_dummies(df["Area"], drop_first=True)
+    new_df = pd.concat([new_df, df_tmp], axis=1)
 
     # Vehicle Power
     new_df["VehPower"] = df["VehPower"]
@@ -187,6 +184,17 @@ def glm_tweedie(df):
     rmse_out = rmse(Y_test, tw_mod.predict(X_test))
     rprint(f"Out-of-sample rmse is {rmse_out}")
 
+    # Plot the coefficients of the features
+    res = {"names": tw_mod.feature_names_in_, "vals": tw_mod.coef_}
+
+    df_res = pd.DataFrame(data=res)
+
+    df_res = df_res.sort_values(by=["vals"])
+
+    df_res.plot(x="names", y="vals", kind="bar")
+
+    plt.show()
+
     # Linear regression
     lin_mod = linear_model.LinearRegression(fit_intercept=True, copy_X=True)
 
@@ -200,7 +208,7 @@ def glm_tweedie(df):
     rprint(f"In-sample rmse is {rmse_in}")
 
     rmse_out = rmse(Y_test, lin_mod.predict(X_test))
-    rprint(f"Out-of-sample rmse is {rmse_out}")
+    rprint(f"Out-of-sample rmse is {rmse_out}\n\n")
 
 
 def train_gbm(df):
@@ -228,7 +236,7 @@ def train_gbm(df):
     score_in = gbm_mod.score(X_train, Y_train)
     score_out = gbm_mod.score(X_test, Y_test)
 
-    rprint(f"Gradient Boosting:")
+    rprint(f"\n\nGradient Boosting:")
     rprint(f"In-sample fit: {score_in}")
     rprint(f"Out-of-sample fit: {score_out}")
 
