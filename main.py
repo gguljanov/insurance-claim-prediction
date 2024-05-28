@@ -14,6 +14,9 @@ import lightgbm as lgb
 
 
 def rmse(x_vec, y_vec):
+    """
+    Root Mean Squared Error (RMSE) for forecast/prediction accuracy
+    """
     rmse_ = np.sqrt(np.sum((x_vec - y_vec) ** 2))
     rmse_ = np.sqrt(np.mean((x_vec - y_vec) ** 2))
     # rmse_ = np.sum(np.abs((x_vec - y_vec)))
@@ -25,7 +28,7 @@ def make_csv():
     """
     This function
         - loads the data set
-        - makes adjustments to the data set
+        - makes adjustments to the data set, i.e. feature engineering
     """
 
     # Load risk features / frequency data
@@ -62,14 +65,6 @@ def make_csv():
 
     df["ClaimAmount"] = df["ClaimAmount"].replace(to_replace=np.nan, value=0.0)
 
-    # # Combine the claim data with frequency data
-    # df = df_sev.set_index("IDpol").join(df_freq.set_index("IDpol"))
-
-    # df["ClaimAmount"] = df["ClaimAmount"].replace(to_replace=np.nan, value=0.0)
-
-    # # More visualization
-    # df_sev = df_sev[df_sev["ClaimAmount"] < up_lim]
-
     # Return the data frame
     return df
 
@@ -78,7 +73,7 @@ def load_csv():
     """Reads the csv data into a data frame"""
 
     # Load the csv file
-    df = pd.read_csv("ins_claims.csv")
+    df = pd.read_csv("ins_claims.csv", index_col=0)
 
     # Remove the outliers
     up_lim = df["ClaimAmount"].quantile(0.995)
@@ -156,7 +151,7 @@ def load_csv():
 
 def glm_tweedie(df):
     """
-    This function trains the generalized linear model with tweedie distribution
+    Trains the generalized linear model with Tweedie distribution
     """
 
     # Train and Test split
@@ -172,7 +167,7 @@ def glm_tweedie(df):
         alpha=1e-2,
         fit_intercept=True,
         link="auto",
-        solver="newton-cholesky",  # "lbfgs",
+        solver="newton-cholesky",
         max_iter=int(1e3),
         tol=1e-4,
         warm_start=False,
@@ -209,6 +204,7 @@ def glm_tweedie(df):
 
 
 def train_gbm(df):
+    """Trains the Gradient boosting model"""
 
     # Train and Test split
     logi = df.columns != "ClaimExp"
@@ -219,21 +215,8 @@ def train_gbm(df):
 
     gbm_mod = lgb.LGBMRegressor(
         boosting_type="gbdt",
-        num_leaves=31,
-        max_depth=-1,
         learning_rate=0.1,
         n_estimators=100,
-        subsample_for_bin=200000,
-        objective=None,
-        class_weight=None,
-        min_split_gain=0.0,
-        min_child_weight=0.001,
-        min_child_samples=20,
-        subsample=1.0,
-        subsample_freq=0,
-        colsample_bytree=1.0,
-        reg_alpha=0.0,
-        reg_lambda=10.0,
         importance_type="gain",
     )
 
@@ -261,8 +244,8 @@ if __name__ == "__main__":
     Main instructions
     """
 
-    # if len(sys.argv) > 1 and sys.argv[1] == "make_csv":
-    #     make_csv()
+    if len(sys.argv) > 1 and sys.argv[1] == "make_csv":
+        make_csv()
 
     # Load the data set
     df = load_csv()
