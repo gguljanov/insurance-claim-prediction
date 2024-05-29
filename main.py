@@ -62,8 +62,7 @@ def make_csv():
 
     df["ClaimAmount"] = df["ClaimAmount"].replace(to_replace=np.nan, value=0.0)
 
-    # Return the data frame
-    return df
+    df.to_csv("ins_claims.csv")
 
 
 def load_csv():
